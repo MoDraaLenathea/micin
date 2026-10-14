@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flower</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0c0618;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+
+    <script>
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+            const size = Math.min(window.innerWidth, window.innerHeight);
+            canvas.width = size;
+            canvas.height = size;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        let mouseX = 0.5;
+        let bloom = 0;
+        let time = 0;
+
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            mouseX = (e.touches[0].clientX - rect.left) / canvas.width;
+        }, { passive: false });
+
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = (e.clientX - rect.left) / canvas.width;
+        });
+
+        function drawPetal(cx, cy, angle, radius, width, color, alpha) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            ctx.globalAlpha = alpha;
+
+            const grad = ctx.createLinearGradient(0, 0, 0, -radius);
+            grad.addColorStop(0, color);
+            grad.addColorStop(0.7, color);
+            grad.addColorStop(1, 'rgba(255,255,255,0.4)');
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(
+                width * 0.8, -radius * 0.25,
+                width * 0.4, -radius * 0.75,
+                0, -radius
+            );
+            ctx.bezierCurveTo(
+                -width * 0.4, -radius * 0.75,
+                -width * 0.8, -radius * 0.25,
+                0, 0
+            );
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function draw() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            // Background
+            ctx.fillStyle = '#0c0618';
+            ctx.fillRect(0, 0, w, h);
+
+            // Soft glow
+            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.45);
+            glow.addColorStop(0, 'rgba(255, 100, 150, 0.15)');
+            glow.addColorStop(1, 'transparent');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, w, h);
+
+            // Stem
+            ctx.strokeStyle = '#1e4d1e';
+            ctx.lineWidth = w * 0.018;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + h * 0.05);
+            ctx.quadraticCurveTo(cx - 15, cy + h * 0.25, cx, cy + h * 0.48);
+            ctx.stroke();
+
+            // Leaves
+            ctx.save();
+            ctx.translate(cx - w * 0.12, cy + h * 0.22);
+            ctx.rotate(-0.6);
+            ctx.fillStyle = '#2a6b2a';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, w * 0.045, w * 0.13, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(cx + w * 0.1, cy + h * 0.28);
+            ctx.rotate(0.5);
+            ctx.fillStyle = '#2a6b2a';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, w * 0.04, w * 0.11, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Petals layers
+            const layers = [
+                { n: 16, r: 0.42, w: 0.19, color: `hsl(${330 + mouseX * 40}, 75%, 62%)` },
+                { n: 12, r: 0.32, w: 0.15, color: `hsl(${340 + mouseX * 30}, 70%, 58%)` },
+                { n: 9,  r: 0.22, w: 0.12, color: `hsl(${350 + mouseX * 20}, 65%, 55%)` },
+                { n: 7,  r: 0.13, w: 0.09, color: `hsl(${10 + mouseX * 15}, 60%, 50%)` }
+            ];
+
+            layers.forEach((layer, i) => {
+                const progress = Math.min(1, bloom * 1.5 - i * 0.2);
+                if (progress <= 0) return;
+
+                const rot = time * 0.00015 * (i % 2 === 0 ? 1 : -1);
+
+                for (let p = 0; p < layer.n; p++) {
+                    const angle = (p / layer.n) * Math.PI * 2 + rot;
+                    drawPetal(
+                        cx, cy,
+                        angle,
+                        w * layer.r * progress,
+                        w * layer.w * progress,
+                        layer.color,
+                        progress
+                    );
+                }
+            });
+
+            // Center (phyllotaxis)
+            const golden = Math.PI * (3 - Math.sqrt(5));
+            const seeds = Math.floor(70 + bloom * 40);
+
+            for (let i = 0; i < seeds; i++) {
+                const r = Math.sqrt(i) * w * 0.0068 * bloom;
+                const a = i * golden + time * 0.0001;
+                const x = cx + Math.cos(a) * r;
+                const y = cy + Math.sin(a) * r;
+                const size = (2.2 + (i % 3)) * (w / 650);
+
+                ctx.beginPath();
+                ctx.fillStyle = `hsl(${38 + (i % 12)}, 80%, ${38 + (i % 6)}%)`;
+                ctx.arc(x, y, size * bloom, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Small highlight in center
+            ctx.beginPath();
+            ctx.fillStyle = 'rgba(255, 220, 150, 0.6)';
+            ctx.arc(cx, cy, w * 0.015 * bloom, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function animate(t) {
+            time = t;
+            bloom = Math.min(1, bloom + 0.005);
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
